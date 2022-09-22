@@ -94,14 +94,12 @@ class ExportOriginJob(BaseJob):
             })
 
         for batch in batches:
-            # https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getfilterlogs
             filter_params = {
                 'address': batch['contract_address'],
                 'fromBlock': batch['from_block'],
                 'toBlock': batch['to_block']
             }
-            event_filter = self.web3.eth.filter(filter_params)
-            events = event_filter.get_all_entries()
+            events = self.web3.eth.get_logs(filter_params)
             for event in events:
                 log = self.receipt_log_mapper.web3_dict_to_receipt_log(event)
                 listing, shop_products = self.event_extractor.extract_event_from_log(log, batch['contract_version'])
@@ -111,8 +109,6 @@ class ExportOriginJob(BaseJob):
                 for product in shop_products:
                     item = self.shop_listing_mapper.product_to_dict(product)
                     self.shop_product_exporter.export_item(item)
-
-            self.web3.eth.uninstallFilter(event_filter.filter_id)
 
     def _end(self):
         self.batch_work_executor.shutdown()
