@@ -2,7 +2,7 @@ from ethereumetl.executors.batch_work_executor import BatchWorkExecutor
 from blockchainetl.jobs.base_job import BaseJob
 from ethereumetl.utils import validate_range
 
-from ethereumetl.mappers.receipt_log_mapper import EthReceiptLogMapper
+from ethereumetl.mappers.log_mapper import EthLogMapper
 from ethereumetl.mappers.origin_mapper import OriginMarketplaceListingMapper, OriginShopProductMapper
 from ethereumetl.service.origin_extractor import OriginEventExtractor
 
@@ -40,7 +40,7 @@ class ExportOriginJob(BaseJob):
 
         self.event_extractor = OriginEventExtractor(ipfs_client)
 
-        self.receipt_log_mapper = EthReceiptLogMapper()
+        self.log_mapper = EthLogMapper()
         self.marketplace_listing_mapper = OriginMarketplaceListingMapper()
         self.shop_listing_mapper = OriginShopProductMapper()
 
@@ -101,14 +101,15 @@ class ExportOriginJob(BaseJob):
             }
             events = self.web3.eth.get_logs(filter_params)
             for event in events:
-                log = self.receipt_log_mapper.web3_dict_to_receipt_log(event)
-                listing, shop_products = self.event_extractor.extract_event_from_log(log, batch['contract_version'])
-                if listing:
-                    item = self.marketplace_listing_mapper.listing_to_dict(listing)
-                    self.marketplace_listing_exporter.export_item(item)
-                for product in shop_products:
-                    item = self.shop_listing_mapper.product_to_dict(product)
-                    self.shop_product_exporter.export_item(item)
+                log = self.log_mapper.web3_dict_to_log(event)
+                if not log.removed:
+                    listing, shop_products = self.event_extractor.extract_event_from_log(log, batch['contract_version'])
+                    if listing:
+                        item = self.marketplace_listing_mapper.listing_to_dict(listing)
+                        self.marketplace_listing_exporter.export_item(item)
+                    for product in shop_products:
+                        item = self.shop_listing_mapper.product_to_dict(product)
+                        self.shop_product_exporter.export_item(item)
 
     def _end(self):
         self.batch_work_executor.shutdown()
